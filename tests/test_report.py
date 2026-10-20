@@ -58,7 +58,7 @@ def test_fail_row_has_all_evidence_and_escapes_pipes():
     by_id["NVM-NS-LBAF-LBADS"] = dataclasses.replace(r, expect_src="$ >= 9 | x", ref="Sec|4.1")
     sec = section(render_markdown(result, meta, profile, by_id, commit), "FAIL")
     row = next(ln for ln in sec.splitlines() if "NVM-NS-LBAF-LBADS" in ln)
-\| \| \| \| \|a\|s\|s\|e\|r\|t\| \|"\|0\|x\|0\| \|(\|0\|)\|"\| \|i\|n\| \|r\|o\|w\| \|a\|n\|d\| \|"\|$\| \|>\|=\| \|9\| \|\\||\| \|x\|"\| \|i\|n\| \|r\|o\|w\| \|a\|n\|d\| \|"\|n\|v\|m\|-\|c\|s\|-\|1\|.\|1\|:\| \|S\|e\|c\|\\||\|4\|.\|1\|"\| \|i\|n\| \|r\|o\|w\|
+    assert "0x0 (0)" in row and r"$ >= 9 \| x" in row and r"nvm-cs-1.1: Sec\|4.1" in row
     assert "id-ns#1" in row and "LBAF[0][3:0]" in row
 
 
