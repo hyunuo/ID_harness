@@ -23,7 +23,8 @@ model: opus
 5. **`overrides`는 NVMe 규칙과 실제로 반대되는 요구일 때만** 쓴다. 더 엄격한 추가 요구는 덮어쓰지 않고 누적한다(엔진이 둘 다 적용). 덮을 NVMe 규칙의 id는 `data/rules/` 안에서 찾아 정확히 적는다. 대상 규칙이 아직 없으면 `overrides`를 쓰지 않고 `note`에 남기고 보고한다.
 6. OCP 2.6 요구가 NVMe 2.0e 기준이라 Base 2.1/NVM CS 1.1과 차이가 의심되면 `note`에 차이를 적고 `status: uncertain`으로 둔다. 확신이 없을 때도 같다.
 7. capability 연동 규칙은 `when: profile.features.<x>`로 쓰고, 새 feature는 `data/features.yaml`에 설명과 관련 비트를 추가한다.
-8. 작업 후 `uv run idharness check-rules`가 종료 코드 0이어야 한다.
+8. 새로 쓰거나 고친 규칙의 `status`는 항상 `uncertain`이다(`cross-checked`는 `rule-verifier`만 설정한다).
+9. 작업 후 `uv run idharness check-rules`가 종료 코드 0이어야 한다.
 
 ## 반환
 

@@ -18,7 +18,7 @@ description: 사용자가 틀렸다고 지적한 판정의 규칙을 PDF로 재�
    ```yaml
    history:
      - date: "<YYYY-MM-DD>"
-       previous: {when: <수정 전 when>, expect: "<수정 전 expect>", level: <수정 전 level>}
+       previous: {when: "<수정 전 when>", expect: "<수정 전 expect>", level: <수정 전 level>}
        reason: "<사용자 이유와 PDF 근거>"
    ```
 

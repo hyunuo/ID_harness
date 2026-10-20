@@ -26,7 +26,7 @@ model: opus
    - reserved 비트와 ascii 필드는 자동 규칙이 이미 있으므로 쓰지 않는다.
    - `ref`에 Figure 번호, 섹션, PDF 페이지를 모두 넣는다.
    - "기능 지원 -> 비트" 규칙은 `when: profile.features.<x>`로 쓴다. 새 feature는 `data/features.yaml`에 설명과 관련 비트를 함께 추가한다.
-   - `status`는 PDF 해당 페이지로 직접 확인했으면 `cross-checked`, 확신이 없으면 `uncertain`과 `note`(이유)를 쓴다. 최종 교차검증은 `rule-verifier`가 독립적으로 한다.
+   - 새로 쓰거나 고친 규칙과 레이아웃의 `status`는 **항상 `uncertain`**이다. `cross-checked`는 `rule-verifier`만 설정한다(`corrected`는 id-rule-fix만). 불확실한 이유는 `note`에 남긴다.
 5. 작업 후 `uv run idharness check-rules`를 실행해 종료 코드 0을 확인한다. 오류가 있으면 고친다.
 6. 필요하면 `uv run idharness coverage --struct <struct> --range <a:b>`로 범위를 확인한다.
 

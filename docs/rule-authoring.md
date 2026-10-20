@@ -16,7 +16,7 @@ data/rules/<source>/<struct>/<group>.yaml 규칙 묶음 (예: nvme-base-2.1/id-c
 
 ## 2. 레이아웃 YAML
 
-최상위 키: `structure`(`id-ctrl`, `id-ns`), `size`(바이트), `source`(기본 출처 id), `status`, `fields`.
+최상위 키: `structure`(`id-ctrl`, `id-ns`), `size`(바이트), `source`(기본 출처 id), `status`, `fields`. **`status`는 필수**이며 허용값은 규칙과 같다(`cross-checked|uncertain|corrected`). 자동 규칙이 레이아웃 `status`를 물려받고, 비어 있으면 `check-rules`가 오류를 낸다.
 
 필드 키:
 
@@ -46,13 +46,13 @@ data/rules/<source>/<struct>/<group>.yaml 규칙 묶음 (예: nvme-base-2.1/id-c
 ```yaml
 - id: NVME-CTRL-SQES-MINES        # 전체 규칙에서 유일. OCP는 OCP-<요구사항ID>[-n]
   source: nvme-base-2.1           # data/sources.yaml의 id
-  ref: "Base 2.1 Figure 275, §5.1.13.2.1, p.312"
+  ref: "Base 2.1 Figure NNN, §5.1.13.2.1, p.NNN (예시)"
   target: id-ctrl.SQES[3:0]
-  when: profile.features.sanitize # 생략 또는 always = 무조건
+  when: always                    # 생략 또는 always = 무조건. 조건부는 profile.features.<x> 등
   expect: "$ == 6"
   level: shall
   kind: value
-  status: cross-checked
+  status: uncertain               # 새로 쓰거나 고친 규칙의 기본값
   note: ""
 ```
 
@@ -67,8 +67,8 @@ data/rules/<source>/<struct>/<group>.yaml 규칙 묶음 (예: nvme-base-2.1/id-c
 | | `should` | 위반 시 WARN |
 | `kind` | `value` | 값을 실제로 검증. 통과하면 PASS |
 | | `format` | 형식만 검증(예: 범위, 정렬). 통과해도 PASS(형식만) |
-| `status` | `cross-checked` | 원본 PDF로 독립 교차검증됨 |
-| | `uncertain` | 확신 없음. 판정에 UNCERTAIN 플래그가 붙음. `note`에 이유 필수 |
+| `status` | `cross-checked` | 원본 PDF로 `rule-verifier`가 독립 교차검증함. **verifier만 설정한다** |
+| | `uncertain` | 새로 쓰거나 고친 규칙의 기본값, 또는 확신 없음. 판정에 UNCERTAIN 플래그가 붙음. `note`에 이유 필수 |
 | | `corrected` | 사용자 지적으로 수정됨. `history`에 이전 내용 기록 |
 
 필드 판정은 FAIL > WARN > PASS(value 통과 1개 이상) > PASS(형식만) > 규칙 없음 순이다. 값이 없는 참조(프로필에 없는 feature 등)는 크래시나 PASS가 아니라 UNKNOWN이 된다.
@@ -93,6 +93,7 @@ data/rules/<source>/<struct>/<group>.yaml 규칙 묶음 (예: nvme-base-2.1/id-c
 - 구조 참조: `id-ctrl.FIELD`, `id-ctrl.FIELD[7:4]`, `id-ns.LBAF[2][3:0]`, `id-ns.NLBAF`. **id-ctrl 규칙은 id-ns를 참조할 수 없다.**
 - 제품 정보: `profile.features.<이름>`(bool), `profile.values.<이름>`(값). 프로필에 없으면 UNKNOWN.
 - 연산자: `== != < <= > >= in {a, b, c} and or not + - * << &`. 이름에 하이픈이 있으므로 **이항 빼기는 공백을 둔다**(`a - b`). 괄호 사용 가능.
+- 우선순위(높은 순): `* << &` > `+ -` > 비교(`== != < <= > >= in`, 연쇄 불가) > `not` > `and` > `or`. 즉 `$ & 1 == 1`은 `$ & (1 == 1)`이 아니라 `($ & 1) == 1`로 읽히지만 헷갈리므로 **항상 괄호를 쓴다**.
 - 정수는 10진, `0x`, `0b`. 문자열은 `'AB  '` (ascii 필드와 정확 비교).
 - 함수: `ascii(x)`(bytes가 전부 출력 가능 ASCII 0x20..0x7E인가), `ljust(x)`(bytes가 왼쪽 정렬인가: 앞에 공백이 없거나 전부 공백), `popcount(x)`(1인 비트 수), `zero(x)`(정수/bytes가 전부 0인가).
 - 예: `"$ in {0, 1, 2}"`, `"$ <= 1 << 12"`, `"id-ctrl.OACS[3] == 1"`, `"$i <= id-ns.NLBAF"`.
@@ -118,18 +119,19 @@ data/rules/<source>/<struct>/<group>.yaml 규칙 묶음 (예: nvme-base-2.1/id-c
 
 capability 비트(예: OACS, ONCS)는 "제품이 기능 X를 지원하면 비트 Y가 1이어야 한다" 규칙이 있어야 의미 있는 PASS가 된다. `when: profile.features.<x>`로 쓴다.
 
-새 feature는 `data/features.yaml`에 먼저 추가한다. 키가 어휘에 없으면 `check-rules`가 오류를 낸다.
+새 feature는 `data/features.yaml`에 먼저 추가한다. 키가 어휘에 없으면 `check-rules`가 오류를 낸다. 또한 해당 feature를 `data/profiles/*.yaml`의 `features`에 설정해야 한다. 설정하지 않은 프로필에서는 그 규칙이 UNKNOWN(판정 불가)이 된다.
 
 ```yaml
 sanitize:
   description: "Sanitize 명령 지원"
-  bits: [id-ctrl.OACS[8], id-ctrl.SANICAP]   # 관련 비트
+  bits: [id-ctrl.OACS[8], id-ctrl.SANICAP]   # 관련 비트 (예시)
 ```
 
 ## 9. overrides
 
 - `overrides: [<규칙 id>]`는 **더 높은 rank의 출처가 낮은 rank 규칙과 실제로 모순될 때만** 쓴다. 대상의 rank는 이 규칙의 rank보다 **낮아야** 한다(같거나 높으면 오류).
 - 모순이 아닌 추가 요구(더 엄격한 조건 등)는 덮어쓰지 말고 규칙을 누적한다. 명시 없이 출처끼리 결과가 엇갈리면 엔진이 FAIL에 CONFLICT("검토 필요")를 붙인다.
+- 덮어쓰기는 인스턴스(필드/원소/namespace) 단위로, 덮어쓰는 규칙의 `when`이 참인 곳에서만 적용된다. 같은 출처 안에서 서로 모순되는 규칙은 `validate`에서 DB 오류가 된다.
 - 덮어쓴 규칙은 판정에서 빠지고 OVERRIDDEN 플래그가 붙는다.
 - rank: nvme-base-2.1=10, nvm-cs-1.1=10, ocp-2.6=20, `policy-*`=30(예약, 미구현).
 
@@ -141,7 +143,7 @@ sanitize:
   status: corrected
   history:
     - date: "2026-10-20"
-      previous: {when: always, expect: "$ <= 64", level: shall}
+      previous: {when: "always", expect: "$ <= 64", level: shall}
       reason: "사용자 지적: Figure 275 p.312 확인 결과 상한은 128"
 ```
 
