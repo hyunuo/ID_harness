@@ -1,0 +1,20 @@
+[project]
+name = "idharness"
+version = "0.1.0"
+description = "NVMe Identify (id-ctrl/id-ns) validation harness"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pyyaml"]
+
+[project.scripts]
+idharness = "idharness.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

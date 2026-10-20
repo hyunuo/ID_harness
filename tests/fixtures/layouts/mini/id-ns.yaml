@@ -1,0 +1,16 @@
+structure: id-ns
+size: 8
+source: nvm-cs-1.1
+status: cross-checked
+fields:
+  - {name: NSZE, offset: 0, size: 4, type: uint, title: Namespace Size}
+  - {name: NLBAF, offset: 4, size: 1, type: uint, title: Number of LBA Formats}
+  - name: LBAF
+    offset: 5
+    size: 3
+    type: uint
+    count: 3
+    title: LBA Format
+    bits:
+      - {name: LBADS, range: "3:0"}
+      - {name: RSVD, range: "7:4", reserved: true}

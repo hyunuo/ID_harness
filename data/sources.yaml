@@ -1,0 +1,16 @@
+sources:
+  - id: nvme-base-2.1
+    title: NVM Express Base Specification
+    version: "2.1"
+    file: spec/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf
+    rank: 10
+  - id: nvm-cs-1.1
+    title: NVM Express NVM Command Set Specification
+    version: "1.1"
+    file: spec/NVM-Express-NVM-Command-Set-Specification-Revision-1.1-2024.08.05-Ratified.pdf
+    rank: 10
+  - id: ocp-2.6
+    title: Datacenter NVMe SSD Specification
+    version: "2.6"
+    file: "spec/Datacenter NVMe® SSD Specification.pdf"
+    rank: 20

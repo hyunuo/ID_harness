@@ -1,0 +1,37 @@
+structure: id-ctrl
+size: 16
+source: nvme-base-2.1
+status: cross-checked
+fields:
+  - {name: VID, offset: 0, size: 2, type: uint, title: Vendor ID}
+  - {name: SN, offset: 2, size: 4, type: ascii, title: Serial Number}
+  - name: OACS
+    offset: 6
+    size: 2
+    type: uint
+    title: Optional Admin Command Support
+    bits:
+      - {name: SECS, range: "0"}
+      - {name: FMT, range: "1"}
+      - {name: DST, range: "2"}
+      - {name: NSMS, range: "3"}
+      - {name: RSVD, range: "15:4", reserved: true}
+  - name: SQES
+    offset: 8
+    size: 1
+    type: uint
+    title: Submission Queue Entry Size
+    bits:
+      - {name: MAXES, range: "7:4"}
+      - {name: MINES, range: "3:0"}
+  - {name: RSVD9, offset: 9, size: 1, type: bytes, reserved: true}
+  - {name: VS, offset: 10, size: 2, type: bytes, vendor_specific: true}
+  - name: PSD
+    offset: 12
+    size: 4
+    type: struct
+    count: 2
+    title: Power State Descriptor
+    element:
+      - {name: MP, offset: 0, size: 1, type: uint, title: Maximum Power}
+      - {name: RSVD1, offset: 1, size: 1, type: bytes, reserved: true}
