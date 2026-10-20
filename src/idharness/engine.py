@@ -277,6 +277,8 @@ def _enumerate_group(group: list[_Ev], profile: Profile, env_decoded: dict[str, 
                 ok = True
                 for e in members:
                     env = _Env(profile, env_decoded, e.prep.rule.target.struct, v, e.index)
+                    if e.prep.when is not None and not _eval_bool(e.prep.when, env, "when"):
+                        continue  # v에서 적용되지 않는 규칙
                     if not _eval_bool(e.prep.expect, env, "expect"):
                         ok = False
                         break
@@ -358,11 +360,20 @@ def evaluate_run(instances: list[Instance], layouts: dict[str, Layout], rules: l
             except ValueError as e:
                 rt_error(p, f"target 오류: {e}")
                 continue
+            tf = _find_field(layout, r.target.field)
+            if tf.vendor_specific or (r.target.sub is not None and any(
+                    e.vendor_specific for e in tf.element if e.name == r.target.sub)):
+                continue  # vendor_specific은 판정 제외
             for key, idx, bits in expansions:
                 ev = _Ev(p, _unit_of(key), key + _bits_suffix(bits), bits, idx,
                          _target_width(layout, r, bits))
                 _evaluate_one(ev, key, dec, env_decoded, profile)
                 evs.append(ev)
+
+        # R8: 런타임 식 오류는 덮어쓰기와 무관하게 기록
+        for e in evs:
+            if e.err is not None:
+                rt_error(e.prep, e.err)
 
         # R7: 인스턴스 단위 명시 덮어쓰기
         by_id = {p.rule.id for p in prepared}
@@ -375,11 +386,9 @@ def evaluate_run(instances: list[Instance], layouts: dict[str, Layout], rules: l
                 e.result = "overridden"
 
         for e in evs:
-            if e.result == "unknown":
-                if e.err is not None:
-                    rt_error(e.prep, e.err)
-                if e.unknown_key is not None:
-                    unknown.setdefault(e.unknown_key, set()).add(e.prep.rule.id)
+            if e.result == "unknown" and e.unknown_key is not None:
+                unknown.setdefault(e.unknown_key, set()).add(e.prep.rule.id)
+
 
         # 충돌 검사
         conflict_units: set[str] = set()

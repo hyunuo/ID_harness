@@ -323,3 +323,46 @@ def test_multiple_ns_instances_sorted():
     r = evaluate_run(insts, L, [], prof(), SOURCES)
     keys = [(f.struct, f.nsid) for f in r.fields]
     assert [k for k in dict.fromkeys(keys)] == [("id-ctrl", None), ("id-ns", 1), ("id-ns", 2)]
+
+
+def test_conflict_respects_when_depending_on_dollar():
+    a = R("A1", "id-ctrl.SQES[7:4]", "$ == 7", when="$ > 5")
+    b = R("B1", "id-ctrl.SQES[7:4]", "$ == 3", source=OCP)
+    r = run({"SQES": 0x60}, [a, b])
+    assert "CONFLICT" not in unit(r, "SQES").flags and r.db_errors == ()
+    a2 = R("A1", "id-ctrl.SQES[7:4]", "$ == 7", when="$ > 5")
+    a3 = R("A2", "id-ctrl.SQES[7:4]", "$ < 5")
+    r = run({"SQES": 0x60}, [a2, a3])
+    assert r.db_errors == ()
+    # genuine contradiction still detected
+    c = R("C1", "id-ctrl.SQES[7:4]", "$ == 7", when="$ > 5")
+    d = R("D1", "id-ctrl.SQES[7:4]", "$ == 6", source=OCP)
+    r = run({"SQES": 0x60}, [c, d])
+    assert "CONFLICT" in unit(r, "SQES").flags
+
+
+def test_overridden_rule_runtime_error_still_recorded():
+    bad = R("E1", "id-ctrl.SN", "$ == 3")
+    ocp = R("O1", "id-ctrl.VID", "$ == 0", source=OCP, overrides=["E1"])
+    r = run({}, [bad, ocp])
+    assert outs(unit(r, "SN"), "E1")[0].result == "overridden"
+    assert len(r.db_errors) == 1 and r.db_errors[0].startswith("t.yaml: E1: runtime expr error: ")
+
+
+def test_vendor_specific_subfield_excluded_from_verdict():
+    import dataclasses
+    lay = L["id-ctrl"]
+    fields = []
+    for f in lay.fields:
+        if f.name == "PSD":
+            els = tuple(dataclasses.replace(e, reserved=False, vendor_specific=True)
+                        if e.name == "RSVD1" else e for e in f.element)
+            f = dataclasses.replace(f, element=els)
+        fields.append(f)
+    layouts = {**L, "id-ctrl": dataclasses.replace(lay, fields=tuple(fields))}
+    rule = R("V1", "id-ctrl.PSD[*].RSVD1", "$ == 'zz'")
+    data = Instance("id-ctrl", None, encode(layouts["id-ctrl"], {}))
+    r = evaluate_run([data], layouts, [rule], prof(), SOURCES)
+    u = unit(r, "PSD[0]")
+    assert u.verdict == "NO_RULE" and u.outcomes == ()
+    assert r.db_errors == ()
