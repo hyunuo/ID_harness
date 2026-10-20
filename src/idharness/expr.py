@@ -158,7 +158,7 @@ def _tokenize(src: str) -> list[Tok]:
 _MAX_DEPTH = 100
 _MAX_NEST = 50
 _MAX_SHIFT = 4096
-_FUNCS = ("ascii", "ljust", "popcount")
+_FUNCS = ("ascii", "ljust", "popcount", "zero")
 _CMP_OPS = ("==", "!=", "<=", ">=", "<", ">")
 _STRUCT_RE = re.compile(r"id-[a-z-]+")
 
@@ -485,6 +485,12 @@ def evaluate(node: Node, env: Env) -> Value:
         v = evaluate(node.args[0], env)
         if node.name == "popcount":
             return bin(_need_int(v, node, "popcount")).count("1")
+        if node.name == "zero":
+            if _is_int(v):
+                return v == 0
+            if isinstance(v, bytes):
+                return not any(v)
+            raise ExprError(f"zero()에는 정수 또는 bytes가 필요함 (col {node.col})")
         if not isinstance(v, bytes):
             raise ExprError(f"{node.name}()에는 bytes가 필요함 (col {node.col})")
         if node.name == "ascii":

@@ -174,3 +174,16 @@ def test_shift_cap():
     with pytest.raises(ExprError, match=r"col 3"):
         evaluate(parse("1 << 10000000000 == 0"), DictEnv({}))
     assert evaluate(parse("1 << 4096 > 0"), DictEnv({})) is True
+
+
+def test_zero_function():
+    ev = lambda src, v: evaluate(parse(src), DictEnv({"$": v}))
+    assert ev("zero($)", 0) is True
+    assert ev("zero($)", 5) is False
+    assert ev("zero($)", b"\x00\x00") is True
+    assert ev("zero($)", b"\x00\x01") is False
+    assert ev("zero($)", b"") is True
+    with pytest.raises(ExprError):
+        ev("zero($)", True)
+    with pytest.raises(ExprError):
+        ev("zero($)", "abc")

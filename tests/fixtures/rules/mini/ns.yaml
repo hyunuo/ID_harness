@@ -1,0 +1,18 @@
+- id: NVM-NS-LBAF-LBADS
+  source: nvm-cs-1.1
+  ref: "NVM CS 1.1 §4.1"
+  target: id-ns.LBAF[*][3:0]
+  when: "$i <= id-ns.NLBAF"
+  expect: "$ >= 9"
+  level: shall
+  kind: value
+  status: cross-checked
+- id: NVM-NS-NSZE
+  source: nvm-cs-1.1
+  ref: "NVM CS 1.1 §4.1"
+  target: id-ns.NSZE
+  when: "id-ctrl.OACS[3] == 1"
+  expect: "$ >= 0"
+  level: should
+  kind: value
+  status: uncertain

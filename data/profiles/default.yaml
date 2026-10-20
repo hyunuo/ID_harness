@@ -1,0 +1,5 @@
+name: default
+layout_set: nvme-2.1
+specs: [nvme-base-2.1, nvm-cs-1.1, ocp-2.6]
+features: {}
+values: {}

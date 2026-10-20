@@ -1,0 +1,36 @@
+- id: NVME-CTRL-SQES-MINES
+  source: nvme-base-2.1
+  ref: "Base 2.1 §5.1.13"
+  target: id-ctrl.SQES[3:0]
+  expect: "$ == 6"
+  level: shall
+  kind: value
+  status: cross-checked
+- id: OCP-CTRL-SQES-MINES
+  source: ocp-2.6
+  ref: "OCP 2.6 §1"
+  target: id-ctrl.SQES[3:0]
+  when: always
+  expect: "$ == 6"
+  level: should
+  kind: value
+  status: uncertain
+  overrides: [NVME-CTRL-SQES-MINES]
+  note: "override example"
+- id: NVME-CTRL-PSD-MP
+  source: nvme-base-2.1
+  ref: "Base 2.1 §5.1.13"
+  target: id-ctrl.PSD[*].MP
+  when: "$i <= 1"
+  expect: "$ >= 0"
+  level: should
+  kind: format
+  status: cross-checked
+- id: NVME-CTRL-OACS-FMT
+  source: nvme-base-2.1
+  ref: "Base 2.1 §5.1.13"
+  target: id-ctrl.OACS[1]
+  expect: "$ in {0, 1}"
+  level: shall
+  kind: format
+  status: cross-checked

@@ -1,0 +1,24 @@
+- id: BAD-TYPO
+  source: nvme-base-2.1
+  ref: "x"
+  target: id-ctrl.SQESS[3:0]
+  expect: "$ == 6"
+  level: shall
+  kind: value
+  status: cross-checked
+- id: DUP-ONE
+  source: nvme-base-2.1
+  ref: "x"
+  target: id-ctrl.VID
+  expect: "$ >= 0"
+  level: shall
+  kind: value
+  status: cross-checked
+- id: BAD-EXPR
+  source: nvme-base-2.1
+  ref: "x"
+  target: id-ctrl.VID
+  expect: "$ == == 1"
+  level: shall
+  kind: value
+  status: cross-checked

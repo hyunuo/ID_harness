@@ -1,0 +1,25 @@
+- id: DUP-ONE
+  source: nvme-base-2.1
+  ref: "x"
+  target: id-ctrl.VID
+  expect: "$ >= 1"
+  level: shall
+  kind: value
+  status: cross-checked
+- id: BAD-OVERRIDES
+  source: nvme-base-2.1
+  ref: "x"
+  target: id-ctrl.VID
+  expect: "$ >= 2"
+  level: shall
+  kind: value
+  status: cross-checked
+  overrides: [OCP-HIGHER]
+- id: OCP-HIGHER
+  source: ocp-2.6
+  ref: "x"
+  target: id-ctrl.VID
+  expect: "$ >= 3"
+  level: shall
+  kind: value
+  status: cross-checked
