@@ -202,6 +202,9 @@ def cmd_collect(args) -> int:
     except (ValueError, FileExistsError) as e:
         print(e)
         return 2
+    except OSError as e:
+        print(f"수집 실패 (OS 오류): {e}")
+        return 2
     print(run_dir)
     return 0
 

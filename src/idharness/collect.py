@@ -11,7 +11,7 @@ from typing import Callable
 
 Runner = Callable[[str], bytes]
 
-_DEVICE = re.compile(r"/dev/nvme\d+")
+_DEVICE = re.compile(r"/dev/nvme[0-9]+")
 _NSID_LINE = re.compile(r"\[\s*\d+\]:\s*0x([0-9a-fA-F]+)")
 _UNSAFE = re.compile(r"[^A-Za-z0-9._@-]")
 
@@ -38,7 +38,12 @@ def ssh_runner(host: str) -> Runner:
     _check_host(host)
 
     def run(cmd: str) -> bytes:
-        p = subprocess.run(["ssh", "-o", "BatchMode=yes", host, cmd], capture_output=True)
+        try:
+            p = subprocess.run(
+                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, cmd],
+                capture_output=True, stdin=subprocess.DEVNULL, timeout=120)
+        except subprocess.TimeoutExpired as e:
+            raise CommandError(cmd, -1, b"timeout after 120s") from e
         if p.returncode != 0:
             raise CommandError(cmd, p.returncode, p.stderr)
         return p.stdout

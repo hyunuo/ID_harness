@@ -67,7 +67,7 @@ def test_collected_run_loads(tmp_path):
 
 def test_device_injection_rejected(tmp_path):
     fake = FakeRunner(ok_responses())
-    for bad in ("/dev/nvme0; rm -rf /", "/dev/nvme0n1", "/dev/nvme0\n", "nvme0", ""):
+    for bad in ("/dev/nvme0; rm -rf /", "/dev/nvme0n1", "/dev/nvme0\n", "nvme0", "", "/dev/nvme٣"):
         with pytest.raises(ValueError):
             collect(fake, "tp1", bad, tmp_path, NOW)
     assert fake.calls == [] and list(tmp_path.iterdir()) == []
@@ -93,7 +93,10 @@ def test_ssh_runner_argv(monkeypatch):
 
     monkeypatch.setattr(collect_mod.subprocess, "run", fake_run)
     assert ssh_runner("tp1")("nvme version") == b"out"
-    assert seen["argv"] == ["ssh", "-o", "BatchMode=yes", "tp1", "nvme version"]
+    assert seen["argv"] == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                            "tp1", "nvme version"]
+    assert "ConnectTimeout=10" in seen["argv"]
+    assert seen["kw"]["timeout"] == 120 and seen["kw"]["stdin"] == collect_mod.subprocess.DEVNULL
     assert not seen["kw"].get("shell")
 
 
@@ -150,3 +153,23 @@ def test_cli_collect_errors(tmp_path, monkeypatch, capsys):
     assert "id-ctrl" in out and "boom" in out
     assert main(["collect", "--host", "tp1", "--device", "/dev/sda", "--out", str(tmp_path)]) == 2
     assert main(["collect", "--host=-bad", "--device", DEV, "--out", str(tmp_path)]) == 2
+
+
+def test_ssh_runner_timeout(monkeypatch):
+    def boom(argv, **kw):
+        raise collect_mod.subprocess.TimeoutExpired(argv, 120)
+
+    monkeypatch.setattr(collect_mod.subprocess, "run", boom)
+    with pytest.raises(CommandError) as ei:
+        ssh_runner("tp1")("x")
+    assert ei.value.returncode == -1 and ei.value.stderr == b"timeout after 120s"
+
+
+def test_cli_collect_missing_ssh(tmp_path, monkeypatch, capsys):
+    def boom(argv, **kw):
+        raise FileNotFoundError("ssh")
+
+    monkeypatch.setattr(collect_mod.subprocess, "run", boom)
+    assert main(["collect", "--host", "tp1", "--device", DEV, "--out", str(tmp_path)]) == 2
+    assert "ssh" in capsys.readouterr().out
+    assert list(tmp_path.iterdir()) == []
