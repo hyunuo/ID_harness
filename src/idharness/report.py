@@ -64,10 +64,11 @@ def _type_of(types: dict, f: FieldResult) -> str | None:
 
 def _fail_rows(result: RunResult, rules: dict[str, Rule], verdict: str, types: dict
                ) -> list[list[object]]:
+    # FAIL 표: shall 위반만. WARN 표: should 위반 전부 (판정이 FAIL인 필드의 should 위반 포함).
     level = "shall" if verdict == "FAIL" else "should"
     rows: list[list[object]] = []
     for f in result.fields:
-        if f.verdict != verdict:
+        if f.verdict != verdict and not (verdict == "WARN" and f.verdict == "FAIL"):
             continue
         for o in f.outcomes:
             r = rules.get(o.rule_id)
@@ -108,6 +109,8 @@ def render_markdown(result: RunResult, meta: dict, profile: Profile, rules_by_id
     fh = ["구조", "필드", "실제값", "기대(규칙 expect)", "규칙 id", "출처·근거(ref)", "플래그"]
     for v in ("FAIL", "WARN"):
         L += [f"## {v}", ""]
+        if v == "WARN":
+            L += ["should 수준 규칙 위반 전부. 판정이 FAIL인 필드의 should 위반도 여기에 포함한다.", ""]
         rs = _fail_rows(result, rules_by_id, v, types)
         L += (_table(fh, rs) if rs else ["없음"]) + [""]
 
@@ -169,18 +172,18 @@ def render_markdown(result: RunResult, meta: dict, profile: Profile, rules_by_id
     L += ["## 고지", "",
           "- CHANGED 비교는 합성 샘플로만 검증되었다. 실제 장치의 nvme-cli 출력 형식과 다를 수 있다.",
           ""]
-    return "\n".join(L)
+    md = "\n".join(L)
+    return md if md.endswith("\n") else md + "\n"
 
 
 def render_summary(result: RunResult) -> str:
     counts = {v: sum(1 for f in result.fields if f.verdict == v) for v in _VERDICT_ORDER}
     L = ["검증 요약: " + ", ".join(f"{VERDICT_LABEL[v]} {counts[v]}" for v in _VERDICT_ORDER)]
-    for v in ("FAIL", "WARN"):
-        items = [f"  {v} {_inst(f)} {f.unit} = {fmt_value(f.value)}"
-                 for f in result.fields if f.verdict == v]
-        L += items[:SUMMARY_LIMIT]
-        if len(items) > SUMMARY_LIMIT:
-            L.append(f"  외 {len(items) - SUMMARY_LIMIT}건")
+    items = [f"  {v} {_inst(f)} {f.unit} = {fmt_value(f.value)}"
+             for v in ("FAIL", "WARN") for f in result.fields if f.verdict == v]
+    L += items[:SUMMARY_LIMIT]
+    if len(items) > SUMMARY_LIMIT:
+        L.append(f"  외 {len(items) - SUMMARY_LIMIT}건")
     nconf = sum(1 for f in result.fields if "CONFLICT" in f.flags)
     nunk = sum(1 for f in result.fields if "UNKNOWN" in f.flags)
     L.append(f"검토 필요: 규칙 충돌 {nconf}, 판정 불가 {nunk}, 규칙 DB 오류 {len(result.db_errors)}")

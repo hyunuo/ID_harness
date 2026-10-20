@@ -91,12 +91,20 @@ def cmd_check_rules(args) -> int:
     return 0
 
 
+def _remove_stale(run_dir: Path) -> None:
+    report = run_dir / "report.md"
+    if report.is_file():
+        report.unlink()
+        print(f"이전 리포트 삭제: {report}")
+
+
 def cmd_validate(args) -> int:
     data = Path(args.data)
     db = load_db(data, args.profile)
     if db.errors or db.profile is None:
         _print_errors(db.errors)
         print(f"규칙 DB 오류 {len(db.errors)}건: 검증을 실행하지 않는다")
+        _remove_stale(Path(args.run_dir))
         return 2
     run_dir = Path(args.run_dir)
     try:
@@ -105,12 +113,13 @@ def cmd_validate(args) -> int:
                     if args.baseline else None)
     except (RunLoadError, ValueError) as e:
         print(e)
+        _remove_stale(run_dir)
         return 2
     result = evaluate_run(instances, db.layouts, db.rules, db.profile, db.sources, baseline)
     by_id = {r.id: r for r in db.rules + generate_auto_rules(db.layouts)}
     md = render_markdown(result, meta, db.profile, by_id, _db_commit(data), db.layouts)
     report = run_dir / "report.md"
-    report.write_text(md, encoding="utf-8")
+    report.write_text(md, encoding="utf-8", newline="\n")
     print(render_summary(result))
     print(f"리포트: {report}")
     return 0

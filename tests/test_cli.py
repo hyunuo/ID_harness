@@ -54,3 +54,25 @@ def test_coverage_totals(capsys, FIX_DATA):
     assert main(["coverage", "--data", str(FIX_DATA)]) == 0
     out = capsys.readouterr().out
     assert "id-ctrl" in out and "id-ns" in out
+
+
+def test_stale_report_removed_on_db_error(tmp_path, capsys, BROKEN_DATA):
+    run_dir = make_run_dir(tmp_path / "run")
+    (run_dir / "report.md").write_text("old", encoding="utf-8")
+    assert main(["validate", str(run_dir), "--data", str(BROKEN_DATA)]) == 2
+    assert not (run_dir / "report.md").exists() and "이전 리포트 삭제" in capsys.readouterr().out
+
+
+def test_stale_report_removed_on_run_error(tmp_path, FIX_DATA):
+    run_dir = make_run_dir(tmp_path / "run")
+    (run_dir / "id-ctrl.bin").write_bytes(b"\x00" * 3)
+    (run_dir / "report.md").write_text("old", encoding="utf-8")
+    assert main(["validate", str(run_dir), "--data", str(FIX_DATA)]) == 2
+    assert not (run_dir / "report.md").exists()
+
+
+def test_report_lf_only_and_trailing_newline(tmp_path, FIX_DATA):
+    run_dir = make_run_dir(tmp_path / "run")
+    assert main(["validate", str(run_dir), "--data", str(FIX_DATA)]) == 0
+    raw = (run_dir / "report.md").read_bytes()
+    assert b"\r" not in raw and raw.endswith(b"\n")
