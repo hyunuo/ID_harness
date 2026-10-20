@@ -7,6 +7,7 @@ from typing import Literal
 
 from idharness.expr import (BinOp, Call, ExprError, Node, Not, Ref, RefNode, SetLit,
                             Unknown, Value, evaluate, refs)
+from idharness.baseline import Baseline, baseline_value
 from idharness.layout import FieldDef, Layout, decode, field_width_bits
 from idharness.profile import Profile
 from idharness.rules import (Rule, expand_target, generate_auto_rules, normalize_ref)
@@ -61,6 +62,7 @@ class RunResult:
     unknown_keys: dict[str, tuple[str, ...]]
     coverage: tuple[Coverage, ...]
     vendor_specific_skipped: int
+    baseline_unmapped: tuple[str, ...] = ()
 
 
 # ---- 레이아웃 보조 ----
@@ -323,7 +325,8 @@ def _verdict(evs: list[_Ev]) -> tuple[str, frozenset[str]]:
 
 
 def evaluate_run(instances: list[Instance], layouts: dict[str, Layout], rules: list[Rule],
-                 profile: Profile, sources: dict[str, Source]) -> RunResult:
+                 profile: Profile, sources: dict[str, Source],
+                 baseline: Baseline | None = None) -> RunResult:
     prepared = _select(rules, layouts, profile)
     db_errors: set[str] = set()
     unknown: dict[str, set[str]] = {}
@@ -424,15 +427,20 @@ def evaluate_run(instances: list[Instance], layouts: dict[str, Layout], rules: l
             outcomes = tuple(sorted(
                 (RuleOutcome(e.prep.rule.id, e.prep.rule.source, e.path, e.result, e.actual, e.reason)
                  for e in uevs), key=lambda o: (o.rule_id, o.target_path)))
+            base_raw, changed = (None, None) if baseline is None else baseline_value(
+                baseline, inst.struct, inst.nsid, unit_key, dec[unit_key])
+            if changed:
+                flags = flags | {"CHANGED"}
             fields.append(FieldResult(inst.struct, inst.nsid, unit_key, offset, dec[unit_key],
-                                      verdict, frozenset(flags), outcomes, None))
+                                      verdict, frozenset(flags), outcomes, base_raw))
 
     fields.sort(key=lambda f: (_struct_order(f.struct), -1 if f.nsid is None else f.nsid,
                                f.offset, f.unit))
     return RunResult(
         fields=tuple(fields), db_errors=tuple(sorted(db_errors)),
         unknown_keys={k: tuple(sorted(v)) for k, v in sorted(unknown.items())},
-        coverage=compute_coverage(layouts, rules, profile), vendor_specific_skipped=vs_skipped)
+        coverage=compute_coverage(layouts, rules, profile), vendor_specific_skipped=vs_skipped,
+        baseline_unmapped=baseline.unmapped if baseline is not None else ())
 
 
 # ---- 커버리지 ----

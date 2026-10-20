@@ -1,0 +1,8 @@
+NVME Identify Controller:
+vid       : 0x1e0f
+sn        : AB12
+oacs      : 0x8
+sqes      : 0x66
+frmw      : 0x16
+  [4:4] : 0x1	Firmware Activate Without Reset Supported
+ps      0 : mp:25.00W operational enlat:0 exlat:0 rrt:0 rrl:0

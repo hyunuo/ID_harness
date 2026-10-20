@@ -1,0 +1,5 @@
+NVME Identify Namespace 1:
+nsze    : 0x100
+nlbaf   : 2
+lbaf  0 : ms:0   lbads:9  rp:0 (in use)
+lbaf  1 : ms:8   lbads:12 rp:0
