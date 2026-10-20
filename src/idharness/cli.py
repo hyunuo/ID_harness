@@ -1,15 +1,17 @@
-"""CLI: validate | check-rules | coverage."""
+"""CLI: validate | check-rules | coverage | collect."""
 from __future__ import annotations
 
 import argparse
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 from idharness.baseline import load_baseline
+from idharness.collect import CommandError, collect, ssh_runner
 from idharness.engine import _units, compute_coverage, evaluate_run
 from idharness.layout import Layout, check_layout, load_layout_set
 from idharness.profile import Profile, load_profile
@@ -187,6 +189,23 @@ def cmd_coverage(args) -> int:
     return 0
 
 
+def cmd_collect(args) -> int:
+    try:
+        run_dir = collect(ssh_runner(args.host), args.host, args.device, Path(args.out),
+                          datetime.now())
+    except CommandError as e:
+        err = e.stderr.decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else e.stderr
+        print(f"명령 실패: {e.cmd}")
+        print(f"반환 코드: {e.returncode}")
+        print(f"stderr: {err}")
+        return 3
+    except (ValueError, FileExistsError) as e:
+        print(e)
+        return 2
+    print(run_dir)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -211,6 +230,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--range", help="포함 바이트 오프셋 a:b")
     g.add_argument("--data", default="data")
     g.set_defaults(fn=cmd_coverage)
+
+    o = sub.add_parser("collect", help="ssh로 테스트 PC의 Identify 덤프를 수집한다")
+    o.add_argument("--host", required=True)
+    o.add_argument("--device", required=True)
+    o.add_argument("--out", default="runs")
+    o.set_defaults(fn=cmd_collect)
 
     args = ap.parse_args(argv)
     return args.fn(args)
