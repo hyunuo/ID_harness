@@ -6,6 +6,7 @@ Python의 eval/compile은 쓰지 않는다. 문법은 설계 문서(Task 2)를 �
 from __future__ import annotations
 
 import re
+import string
 from dataclasses import dataclass
 from typing import Protocol, Union
 
@@ -84,7 +85,7 @@ class Tok:
     col: int
 
 
-_INT_RE = re.compile(r"0[xX][0-9a-fA-F]+|0[bB][01]+|\d+")
+_INT_RE = re.compile(r"0[xX][0-9a-fA-F]+|0[bB][01]+|[0-9]+")
 _ID_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*")
 _OPS = ("==", "!=", "<=", ">=", "<<", "<", ">", "+", "-", "*", "&",
         "(", ")", "[", "]", "{", "}", ",", ".", ":")
@@ -106,12 +107,22 @@ def _tokenize(src: str) -> list[Tok]:
             else:
                 toks.append(Tok("ID", "$", col))
                 i += 1
-        elif c.isdigit():
+        elif c in string.digits:
             m = _INT_RE.match(src, i)
             assert m
             if _IDCHAR_RE.match(src, m.end()):
                 raise ExprError(f"잘못된 숫자 (col {col})")
-            toks.append(Tok("INT", int(m.group(), 0), col))
+            text = m.group()
+            try:
+                if text[:2] in ("0x", "0X"):
+                    val = int(text[2:], 16)
+                elif text[:2] in ("0b", "0B"):
+                    val = int(text[2:], 2)
+                else:
+                    val = int(text, 10)
+            except ValueError:
+                raise ExprError(f"잘못되었거나 너무 긴 숫자 (col {col})") from None
+            toks.append(Tok("INT", val, col))
             i = m.end()
         elif c in "'\"":
             j = i + 1
@@ -125,7 +136,7 @@ def _tokenize(src: str) -> list[Tok]:
                 raise ExprError(f"닫히지 않은 문자열 (col {col})")
             toks.append(Tok("STR", "".join(buf), col))
             i = j + 1
-        elif c.isalpha() or c == "_":
+        elif c in string.ascii_letters or c == "_":
             m = _ID_RE.match(src, i)
             assert m
             toks.append(Tok("ID", m.group(), col))
@@ -144,6 +155,9 @@ def _tokenize(src: str) -> list[Tok]:
 
 # ---- 파서 ----
 
+_MAX_DEPTH = 100
+_MAX_NEST = 50
+_MAX_SHIFT = 4096
 _FUNCS = ("ascii", "ljust", "popcount")
 _CMP_OPS = ("==", "!=", "<=", ">=", "<", ">")
 _STRUCT_RE = re.compile(r"id-[a-z-]+")
@@ -153,6 +167,30 @@ class _Parser:
     def __init__(self, src: str):
         self.toks = _tokenize(src)
         self.pos = 0
+        self.nest = 0
+        self.depths: dict[int, int] = {}
+
+    def mk(self, node: Node) -> Node:
+        """노드 깊이를 기록하고 상한을 넘으면 ExprError (refs/evaluate 재귀 보호)."""
+        kids: tuple[Node, ...] = ()
+        if isinstance(node, Not):
+            kids = (node.operand,)
+        elif isinstance(node, BinOp):
+            kids = (node.left, node.right)
+        elif isinstance(node, Call):
+            kids = node.args
+        elif isinstance(node, SetLit):
+            kids = node.items
+        d = 1 + max((self.depths[id(k)] for k in kids), default=0)
+        if d > _MAX_DEPTH:
+            raise ExprError(f"식이 너무 깊음 (col {node.col})")
+        self.depths[id(node)] = d
+        return node
+
+    def enter(self) -> None:
+        self.nest += 1
+        if self.nest > _MAX_NEST:
+            raise self.err("식 중첩이 너무 깊음")
 
     @property
     def cur(self) -> Tok:
@@ -194,23 +232,28 @@ class _Parser:
         return node
 
     def parse_or(self) -> Node:
+        self.enter()
         left = self.parse_and()
         while self.is_kw("or"):
             t = self.next()
-            left = BinOp(t.col, "or", left, self.parse_and())
+            left = self.mk(BinOp(t.col, "or", left, self.parse_and()))
+        self.nest -= 1
         return left
 
     def parse_and(self) -> Node:
         left = self.parse_not()
         while self.is_kw("and"):
             t = self.next()
-            left = BinOp(t.col, "and", left, self.parse_not())
+            left = self.mk(BinOp(t.col, "and", left, self.parse_not()))
         return left
 
     def parse_not(self) -> Node:
         if self.is_kw("not"):
             t = self.next()
-            return Not(t.col, self.parse_not())
+            self.enter()
+            node = self.mk(Not(t.col, self.parse_not()))
+            self.nest -= 1
+            return node
         return self.parse_cmp()
 
     def parse_cmp(self) -> Node:
@@ -218,27 +261,27 @@ class _Parser:
         t = self.cur
         if t.kind == "OP" and t.value in _CMP_OPS:
             self.next()
-            return BinOp(t.col, t.value, left, self.parse_sum())  # type: ignore[arg-type]
+            return self.mk(BinOp(t.col, t.value, left, self.parse_sum()))  # type: ignore[arg-type]
         if self.is_kw("in"):
             self.next()
             right = self.parse_sum()
             if not isinstance(right, SetLit):
                 raise self.err("'in' 오른쪽은 {...} 집합이어야 함", t)
-            return BinOp(t.col, "in", left, right)
+            return self.mk(BinOp(t.col, "in", left, right))
         return left
 
     def parse_sum(self) -> Node:
         left = self.parse_term()
         while self.cur.kind == "OP" and self.cur.value in ("+", "-"):
             t = self.next()
-            left = BinOp(t.col, t.value, left, self.parse_term())  # type: ignore[arg-type]
+            left = self.mk(BinOp(t.col, t.value, left, self.parse_term()))  # type: ignore[arg-type]
         return left
 
     def parse_term(self) -> Node:
         left = self.parse_atom()
         while self.cur.kind == "OP" and self.cur.value in ("*", "<<", "&"):
             t = self.next()
-            left = BinOp(t.col, t.value, left, self.parse_atom())  # type: ignore[arg-type]
+            left = self.mk(BinOp(t.col, t.value, left, self.parse_atom()))  # type: ignore[arg-type]
         return left
 
     def parse_bits_body(self) -> tuple[int, int]:
@@ -258,10 +301,10 @@ class _Parser:
         t = self.cur
         if t.kind == "INT":
             self.next()
-            return Lit(t.col, t.value)  # type: ignore[arg-type]
+            return self.mk(Lit(t.col, t.value))  # type: ignore[arg-type]
         if t.kind == "STR":
             self.next()
-            return Lit(t.col, t.value)  # type: ignore[arg-type]
+            return self.mk(Lit(t.col, t.value))  # type: ignore[arg-type]
         if t.kind == "OP":
             if t.value == "(":
                 self.next()
@@ -275,24 +318,24 @@ class _Parser:
                     self.next()
                     items.append(self.parse_or())
                 self.expect_op("}")
-                return SetLit(t.col, tuple(items))
+                return self.mk(SetLit(t.col, tuple(items)))
             raise self.err(f"예상치 못한 토큰 {t.value!r}")
         if t.kind != "ID":
             raise self.err("식이 필요함")
         name: str = t.value  # type: ignore[assignment]
         if name in ("true", "false"):
             self.next()
-            return Lit(t.col, name == "true")
+            return self.mk(Lit(t.col, name == "true"))
         if name == "$":
             self.next()
             bits = None
             if self.is_op("["):
                 self.next()
                 bits = self.parse_bits_body()
-            return RefNode(t.col, Ref("$", "", bits))
+            return self.mk(RefNode(t.col, Ref("$", "", bits)))
         if name == "$i":
             self.next()
-            return RefNode(t.col, Ref("$i", "", None))
+            return self.mk(RefNode(t.col, Ref("$i", "", None)))
         if name == "profile":
             return self.parse_profile()
         if name in _FUNCS:
@@ -312,7 +355,7 @@ class _Parser:
         if self.cur.kind != "ID":
             raise self.err("이름 필요")
         nm = self.next().value
-        return RefNode(t.col, Ref("profile", f"{kind.value}.{nm}", None))
+        return self.mk(RefNode(t.col, Ref("profile", f"{kind.value}.{nm}", None)))
 
     def parse_call(self) -> Node:
         t = self.next()
@@ -324,7 +367,7 @@ class _Parser:
         self.expect_op(")")
         if len(args) != 1:
             raise self.err(f"{t.value}()는 인자 1개", t)
-        return Call(t.col, t.value, tuple(args))  # type: ignore[arg-type]
+        return self.mk(Call(t.col, t.value, tuple(args)))  # type: ignore[arg-type]
 
     def parse_struct(self) -> Node:
         t = self.next()
@@ -361,7 +404,7 @@ class _Parser:
                     break
             else:
                 break
-        return RefNode(t.col, Ref(t.value, path, bits))  # type: ignore[arg-type]
+        return self.mk(RefNode(t.col, Ref(t.value, path, bits)))  # type: ignore[arg-type]
 
 
 def parse(src: str) -> Node:
@@ -403,16 +446,19 @@ def _need_int(v: Value, node: Node, what: str) -> int:
     return v  # type: ignore[return-value]
 
 
-def _norm(a: Value, b: Value) -> tuple[Value, Value]:
-    if isinstance(a, str) and isinstance(b, bytes):
-        a = a.encode("latin-1")
-    elif isinstance(a, bytes) and isinstance(b, str):
-        b = b.encode("latin-1")
+def _norm(a: Value, b: Value, node: Node) -> tuple[Value, Value]:
+    try:
+        if isinstance(a, str) and isinstance(b, bytes):
+            a = a.encode("latin-1")
+        elif isinstance(a, bytes) and isinstance(b, str):
+            b = b.encode("latin-1")
+    except UnicodeEncodeError:
+        raise ExprError(f"latin-1로 표현할 수 없는 문자열 (col {node.col})") from None
     return a, b
 
 
 def _eq(a: Value, b: Value, node: Node) -> bool:
-    a, b = _norm(a, b)
+    a, b = _norm(a, b, node)
     num = (int, bool)
     if isinstance(a, num) and isinstance(b, num):
         return a == b
@@ -481,7 +527,7 @@ def evaluate(node: Node, env: Env) -> Value:
     if op == "&":
         return a & b
     if op == "<<":
-        if b < 0:
-            raise ExprError(f"음수 시프트 (col {node.col})")
+        if b < 0 or b > _MAX_SHIFT:
+            raise ExprError(f"시프트 양은 0..{_MAX_SHIFT} (col {node.col})")
         return a << b
     raise ExprError(f"알 수 없는 연산자 {op} (col {node.col})")

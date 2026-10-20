@@ -130,3 +130,47 @@ def test_trailing_garbage_and_bad_chars():
 
 def test_bool_literals():
     assert evaluate(parse("true and not false"), DictEnv({})) is True
+
+
+def test_leading_zero_decimal_is_base10():
+    assert evaluate(parse("$ == 08"), DictEnv({"$": 8})) is True
+
+
+def test_huge_decimal_literal_is_expr_error():
+    with pytest.raises(ExprError, match=r"col 6"):
+        parse("$ == " + "9" * 5000)
+
+
+def test_non_ascii_chars_are_expr_error():
+    with pytest.raises(ExprError, match=r"col 6"):
+        parse("$ == ²")
+    with pytest.raises(ExprError, match=r"col 1"):
+        parse("한글")
+    with pytest.raises(ExprError, match=r"col 6"):
+        parse("$ == ٣")
+
+
+def test_deep_nesting_is_expr_error():
+    for src in ("(" * 5000 + "1" + ")" * 5000,
+                "not " * 5000 + "true",
+                "{" * 5000 + "1" + "}" * 5000,
+                "+".join(["1"] * 5000),
+                " and ".join(["true"] * 5000)):
+        with pytest.raises(ExprError):
+            parse(src)
+
+
+def test_moderate_nesting_still_evaluates():
+    assert evaluate(parse("(" * 20 + "1" + ")" * 20 + " == 1"), DictEnv({})) is True
+    assert evaluate(parse("+".join(["1"] * 50) + " == 50"), DictEnv({})) is True
+
+
+def test_non_latin1_string_vs_bytes_is_expr_error():
+    with pytest.raises(ExprError, match=r"col 3"):
+        evaluate(parse("$ == '한'"), DictEnv({"$": b"A"}))
+
+
+def test_shift_cap():
+    with pytest.raises(ExprError, match=r"col 3"):
+        evaluate(parse("1 << 10000000000 == 0"), DictEnv({}))
+    assert evaluate(parse("1 << 4096 > 0"), DictEnv({})) is True
